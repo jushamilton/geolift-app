@@ -1,0 +1,2 @@
+date_col,geo_col,treatment_group,y_col
+date,location,"DMA1, DMA3, DMA2, DMA4",sales
