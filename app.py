@@ -102,6 +102,9 @@ def update_y_selector(geo_field):
         return numeric_cols
     return []
 
+import dash_core_components as dcc
+import base64
+import os
 import subprocess
 
 def run_analysis(n_clicks, date_col, geo_col, treatment_group, y_col):
@@ -126,7 +129,7 @@ def run_analysis(n_clicks, date_col, geo_col, treatment_group, y_col):
     if not os.path.exists("selections.csv"):
         return "Error: Selections CSV file not saved.", None
 
-    # Run the R script and capture output live
+    # Run the R script and capture the output
     process = subprocess.Popen(
         ["Rscript", "geolift_analysis.R"],
         stdout=subprocess.PIPE,
@@ -151,17 +154,29 @@ def run_analysis(n_clicks, date_col, geo_col, treatment_group, y_col):
     if process.returncode != 0:
         return f"Error in R script:\n{full_output}", None
 
-    # Check if the PNG file was created
-    plot_path = "geo_lift_plot.png"
-    if not os.path.exists(plot_path):
-        return f"GeoLift analysis completed, but no plot was generated.\n{full_output}", None
+    # Format the full_output for presentation (example formatting)
+    formatted_output = f"""
+    ### GeoLift Analysis Summary
+    **Status:** GeoLift analysis completed successfully.
+
+    #### Data Summary
+    {full_output}
+
+    #### Additional Information
+    * **Location**: {geo_col}
+    * **Date Column**: {date_col}
+    * **Y Column**: {y_col}
+    """
 
     # Convert the PNG file to Base64 for display in Dash
-    with open(plot_path, "rb") as img_file:
-        encoded_image = base64.b64encode(img_file.read()).decode("utf-8")
-    img_src = f"data:image/png;base64,{encoded_image}"
+    plot_path = "geo_lift_plot.png"
+    if os.path.exists(plot_path):
+        with open(plot_path, "rb") as img_file:
+            encoded_image = base64.b64encode(img_file.read()).decode("utf-8")
+        img_src = f"data:image/png;base64,{encoded_image}"
+        return dcc.Markdown(formatted_output), img_src
 
-    return f"GeoLift analysis completed successfully.\n{full_output}", img_src
+    return f"GeoLift analysis completed, but no plot was generated.\n{full_output}", None
 
  # Callback: Run Analysis and Display Results
 @app.callback(
