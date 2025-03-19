@@ -103,15 +103,12 @@ def update_y_selector(geo_field):
     return []
 
 import subprocess
-import os
-import base64
-import pandas as pd
 
 def run_analysis(n_clicks, date_col, geo_col, treatment_group, y_col):
     df = data_store.get("df")
     
     if df is None or not date_col or not geo_col or not treatment_group or not y_col:
-        return "Please complete all selections before running analysis.", []
+        return "Please complete all selections before running analysis.", None
 
     # Save dataframe to CSV for R to process
     df.to_csv("input_data.csv", index=False)
@@ -127,9 +124,9 @@ def run_analysis(n_clicks, date_col, geo_col, treatment_group, y_col):
 
     # Ensure selections.csv is saved correctly before running the R script
     if not os.path.exists("selections.csv"):
-        return "Error: Selections CSV file not saved.", []
+        return "Error: Selections CSV file not saved.", None
 
-    # Run the R script and capture output
+    # Run the R script and capture output live
     process = subprocess.Popen(
         ["Rscript", "geolift_analysis.R"],
         stdout=subprocess.PIPE,
@@ -139,41 +136,32 @@ def run_analysis(n_clicks, date_col, geo_col, treatment_group, y_col):
 
     full_output = ""
 
+    # Read stdout and stderr together in real-time
     for line in process.stdout:
         full_output += line
-        print(line, end="")  # Print R output live for debugging
+        print(line, end="")  # Print R output in real-time for debugging
 
     for line in process.stderr:
         full_output += line
-        print(line, end="")  # Print R errors live for debugging
+        print(line, end="")  # Print R errors in real-time for debugging
 
-    process.wait()
-
-    # Capture full R output from geolift_output.txt
-    if os.path.exists("geolift_output.txt"):
-        with open("geolift_output.txt", "r") as f:
-            full_output += f.read()
+    process.wait()  # Ensure process completes
 
     # If the script failed, return the full output
     if process.returncode != 0:
-        return f"Error in R script:\n{full_output}", []
+        return f"Error in R script:\n{full_output}", None
 
-    # Check for multiple PNG files
-    plot_paths = [file for file in os.listdir() if file.startswith("geo_lift_plot_") and file.endswith(".png")]
+    # Check if the PNG file was created
+    plot_path = "geo_lift_plot.png"
+    if not os.path.exists(plot_path):
+        return f"GeoLift analysis completed, but no plot was generated.\n{full_output}", None
 
-    if not plot_paths:
-        return f"GeoLift analysis completed, but no plots were generated.\n{full_output}", []
+    # Convert the PNG file to Base64 for display in Dash
+    with open(plot_path, "rb") as img_file:
+        encoded_image = base64.b64encode(img_file.read()).decode("utf-8")
+    img_src = f"data:image/png;base64,{encoded_image}"
 
-    # Convert each PNG to Base64 for display
-    encoded_images = []
-    for plot_path in sorted(plot_paths):  # Sort to maintain order
-        with open(plot_path, "rb") as img_file:
-            encoded_image = base64.b64encode(img_file.read()).decode("utf-8")
-        img_src = f"data:image/png;base64,{encoded_image}"
-        encoded_images.append(img_src)
-
-    return f"GeoLift analysis completed successfully.\n{full_output}", encoded_images
-
+    return f"GeoLift analysis completed successfully.\n{full_output}", img_src
 
  # Callback: Run Analysis and Display Results
 @app.callback(

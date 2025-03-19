@@ -32,11 +32,13 @@ png("geo_lift_plot.png", width = 800, height = 600)
 print("Columns in GeoTestData after GeoDataRead:")
 print(colnames(GeoTestData))
 
-GeoPlot(GeoTestData,
-        Y_id = "Y",
-        time_id = "time",
-        location_id = "location",
-        treatment_start = 50)
+
+
+# GeoPlot(GeoTestData,
+#         Y_id = "Y",
+#         time_id = "time",
+#         location_id = "location",
+#         treatment_start = 50)
 
 GeoTest_test_analysis <- GeoLift(Y_id = "Y",
                          data = GeoTestData,
@@ -46,5 +48,8 @@ GeoTest_test_analysis <- GeoLift(Y_id = "Y",
 
                          )
 print(summary(GeoTest_test_analysis))
+
 plot(GeoTest_test_analysis, type = "Lift", subtitle = "Installs", treatment_end_date = '2025-01-06')
-plot(GeoTest_test_analysis, type = "ATT", subtitle = "Installs", treatment_end_date = '2024-10-06')
+
+# plot(GeoTest_test_analysis, type = "Lift", subtitle = "Installs", treatment_end_date = '2025-01-06')
+# plot(GeoTest_test_analysis, type = "ATT", subtitle = "Installs", treatment_end_date = '2024-10-06')
