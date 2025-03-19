@@ -1,11 +1,17 @@
 import dash
 from dash import dcc, html, Input, Output, State, dash_table
 import pandas as pd
-import plotly.express as px
 import io
 import base64
+import subprocess
+import os
 
 app = dash.Dash(__name__)
+
+# File storage paths
+UPLOAD_FOLDER = "uploads"
+RESULTS_FILE = "results.json"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # App layout
 app.layout = html.Div([
@@ -38,7 +44,10 @@ app.layout = html.Div([
     
     html.Button("Run Analysis", id="run-analysis"),
     
-    dcc.Graph(id="output-graph")
+    html.Div(id="analysis-output"),
+    
+    # Display the generated plot
+    html.Img(id="output-graph", style={"width": "800px", "height": "600px"})
 ])
 
 # Store uploaded data
@@ -76,7 +85,6 @@ def update_table(contents, filename):
 )
 def update_treatment_selector(geo_field):
     if geo_field:
-        # Get unique values from the selected geo field
         df = data_store.get("df")
         geo_values = [{"label": geo, "value": geo} for geo in df[geo_field].unique()]
         return geo_values
@@ -94,9 +102,82 @@ def update_y_selector(geo_field):
         return numeric_cols
     return []
 
-# Callback: Run Analysis
+import subprocess
+import os
+import base64
+import pandas as pd
+
+def run_analysis(n_clicks, date_col, geo_col, treatment_group, y_col):
+    df = data_store.get("df")
+    
+    if df is None or not date_col or not geo_col or not treatment_group or not y_col:
+        return "Please complete all selections before running analysis.", []
+
+    # Save dataframe to CSV for R to process
+    df.to_csv("input_data.csv", index=False)
+
+    # Save selections to CSV
+    selections = pd.DataFrame({
+        "date_col": [date_col],
+        "geo_col": [geo_col],
+        "treatment_group": [", ".join(treatment_group)],
+        "y_col": [y_col]
+    })
+    selections.to_csv("selections.csv", index=False)
+
+    # Ensure selections.csv is saved correctly before running the R script
+    if not os.path.exists("selections.csv"):
+        return "Error: Selections CSV file not saved.", []
+
+    # Run the R script and capture output
+    process = subprocess.Popen(
+        ["Rscript", "geolift_analysis.R"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    full_output = ""
+
+    for line in process.stdout:
+        full_output += line
+        print(line, end="")  # Print R output live for debugging
+
+    for line in process.stderr:
+        full_output += line
+        print(line, end="")  # Print R errors live for debugging
+
+    process.wait()
+
+    # Capture full R output from geolift_output.txt
+    if os.path.exists("geolift_output.txt"):
+        with open("geolift_output.txt", "r") as f:
+            full_output += f.read()
+
+    # If the script failed, return the full output
+    if process.returncode != 0:
+        return f"Error in R script:\n{full_output}", []
+
+    # Check for multiple PNG files
+    plot_paths = [file for file in os.listdir() if file.startswith("geo_lift_plot_") and file.endswith(".png")]
+
+    if not plot_paths:
+        return f"GeoLift analysis completed, but no plots were generated.\n{full_output}", []
+
+    # Convert each PNG to Base64 for display
+    encoded_images = []
+    for plot_path in sorted(plot_paths):  # Sort to maintain order
+        with open(plot_path, "rb") as img_file:
+            encoded_image = base64.b64encode(img_file.read()).decode("utf-8")
+        img_src = f"data:image/png;base64,{encoded_image}"
+        encoded_images.append(img_src)
+
+    return f"GeoLift analysis completed successfully.\n{full_output}", encoded_images
+
+
+ # Callback: Run Analysis and Display Results
 @app.callback(
-    Output("output-graph", "figure"),
+    [Output("analysis-output", "children"), Output("output-graph", "src")],
     Input("run-analysis", "n_clicks"),
     State("date-selector", "value"),
     State("geo-selector", "value"),
@@ -104,18 +185,8 @@ def update_y_selector(geo_field):
     State("y-selector", "value"),
     prevent_initial_call=True
 )
-def run_analysis(n_clicks, date_col, geo_col, treatment_group, y_col):
-    df = data_store.get("df")
-    
-    if df is None or not date_col or not geo_col or not treatment_group or not y_col:
-        return px.scatter(title="Please complete all selections")
-    
-    # Filter the DataFrame based on the treatment group
-    treatment_df = df[df[geo_col].isin(treatment_group)]
-    
-    # Plot: Example, can be customized based on GeoLift analysis logic
-    fig = px.line(treatment_df, x=date_col, y=y_col, color=geo_col, title=f"{y_col} over Time for Treatment Group")
-    return fig
+def update_analysis_output(n_clicks, date_col, geo_col, treatment_group, y_col):
+    return run_analysis(n_clicks, date_col, geo_col, treatment_group, y_col)
 
 # Run the app
 if __name__ == "__main__":
