@@ -43,7 +43,7 @@ print(colnames(GeoTestData))
 GeoTest_test_analysis <- GeoLift(Y_id = "Y",
                          data = GeoTestData,
                          locations = treatment_group ,
-                          treatment_start_time = 40,
+                          treatment_start_time = 50,
                           treatment_end_time = 70,
 
                          )
